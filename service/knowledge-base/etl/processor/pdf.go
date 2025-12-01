@@ -23,7 +23,8 @@ const (
 	defaultChunkSize          = 4000
 	defaultChunkOverlap       = 200
 	defaultEmbeddingBatchSize = 10
-	defaultCollectionName     = "knowledge_doc"
+
+	DefaultCollectionName = "knowledge_doc"
 )
 
 type PDFETLProcessor struct {
@@ -68,7 +69,7 @@ func NewPDFETLProcessor() (*PDFETLProcessor, error) {
 
 	store, err := v2.New(context.Background(), config,
 		v2.WithEmbedder(embedder),
-		v2.WithCollectionName(defaultCollectionName),
+		v2.WithCollectionName(DefaultCollectionName),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create milvus client: %v", err)
