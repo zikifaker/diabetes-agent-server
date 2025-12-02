@@ -48,8 +48,8 @@ func HandleETLMessage(ctx context.Context, msg *primitive.MessageExt) error {
 	for _, processor := range etlProcessorRegistry {
 		if processor.CanProcess(etlMessage.FileType) {
 			foundProcessor = true
-			if err := processor.ExecuteETLPipeline(ctx, object); err != nil {
-				return fmt.Errorf("failed to execute ETL: %v", err)
+			if err := processor.ExecuteETLPipeline(ctx, object, etlMessage.ObjectName); err != nil {
+				return fmt.Errorf("failed to execute ETL pipeline: %v", err)
 			}
 			return nil
 		}

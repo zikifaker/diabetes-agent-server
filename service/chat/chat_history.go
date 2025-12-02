@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	defaultTableName = "chat_message"
-	defaultLimit     = 200
+	tableName = "chat_message"
+	limit     = 200
 )
 
 type MySQLChatMessageHistory struct {
@@ -33,9 +33,9 @@ var _ schema.ChatMessageHistory = &MySQLChatMessageHistory{}
 func NewMySQLChatMessageHistory(session string) *MySQLChatMessageHistory {
 	return &MySQLChatMessageHistory{
 		DB:        dao.DB,
-		TableName: defaultTableName,
+		TableName: tableName,
 		Session:   session,
-		Limit:     defaultLimit,
+		Limit:     limit,
 	}
 }
 

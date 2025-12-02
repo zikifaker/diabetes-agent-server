@@ -96,7 +96,6 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.26 // indirect
 	github.com/milvus-io/milvus-proto/go-api/v2 v2.6.3 // indirect
-	github.com/milvus-io/milvus-sdk-go/v2 v2.4.0 // indirect
 	github.com/milvus-io/milvus/pkg/v2 v2.6.3 // indirect
 	github.com/mitchellh/copystructure v1.0.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.0 // indirect

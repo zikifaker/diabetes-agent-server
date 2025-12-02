@@ -20,10 +20,10 @@ import (
 )
 
 const (
-	defaultModel           = "deepseek-v3"
-	defaultTaskChanSize    = 100
-	defaultWorkerNum       = 10
-	defaultUpdateBatchSize = 1
+	modelName       = "deepseek-v3"
+	taskChanSize    = 100
+	workerNum       = 10
+	updateBatchSize = 1
 
 	// 触发生成对话摘要的最小对话长度（字节数）
 	minContentLengthForSummary = 2500
@@ -66,7 +66,7 @@ func newSummarizer() (*Summarizer, error) {
 		},
 	}
 	llm, err := openai.New(
-		openai.WithModel(defaultModel),
+		openai.WithModel(modelName),
 		openai.WithToken(config.Cfg.Model.APIKey),
 		openai.WithBaseURL(chat.BaseURL),
 		openai.WithHTTPClient(httpClient),
@@ -77,9 +77,9 @@ func newSummarizer() (*Summarizer, error) {
 
 	return &Summarizer{
 		llm:             llm,
-		taskChan:        make(chan SummaryTask, defaultTaskChanSize),
-		workerNum:       defaultWorkerNum,
-		updateBatchSize: defaultUpdateBatchSize,
+		taskChan:        make(chan SummaryTask, taskChanSize),
+		workerNum:       workerNum,
+		updateBatchSize: updateBatchSize,
 	}, nil
 }
 

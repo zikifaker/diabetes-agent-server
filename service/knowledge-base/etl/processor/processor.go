@@ -1,6 +1,8 @@
 package processor
 
-import "context"
+import (
+	"context"
+)
 
 // ETLProcessor 知识文件ETL处理器
 type ETLProcessor interface {
@@ -8,5 +10,5 @@ type ETLProcessor interface {
 	CanProcess(fileType string) bool
 
 	// 执行ETL流程
-	ExecuteETLPipeline(ctx context.Context, data []byte) error
+	ExecuteETLPipeline(ctx context.Context, object []byte, objectName string) error
 }

@@ -54,7 +54,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		})
 
 		if err != nil || !token.Valid {
-			slog.Info("Invalid token", "err", err)
+			slog.Info("Invalid token", "err", err, "user_email", claims.Email)
 			c.AbortWithStatus(http.StatusUnauthorized)
 			return
 		}

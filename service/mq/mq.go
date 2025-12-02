@@ -9,7 +9,7 @@ import (
 	"log/slog"
 
 	"github.com/apache/rocketmq-client-go/v2"
-	"github.com/apache/rocketmq-client-go/v2/consumer"
+	c "github.com/apache/rocketmq-client-go/v2/consumer"
 	"github.com/apache/rocketmq-client-go/v2/primitive"
 	"github.com/apache/rocketmq-client-go/v2/producer"
 	"github.com/apache/rocketmq-client-go/v2/rlog"
@@ -18,20 +18,21 @@ import (
 
 const (
 	TopicKnowledgeBase = "topic_knowledge_base"
+	TagETL             = "tag_etl"
 
-	TagETL = "tag_etl"
+	consumeGroupKnowledgeBase = "cg_knowledge_base"
 
-	consumerGroup = "cg_knowledge_base_etl"
-
-	sendAttempts = 3
+	sendMessageAttempts  = 3
+	maxReconsumeTimes    = 5
+	consumeGoroutineNums = 10
 )
 
 var (
-	// 生产者实例
+	// 全局生产者
 	producerInstance rocketmq.Producer
 
-	// 消费者实例
-	consumerInstance rocketmq.PushConsumer
+	// 知识库业务消费者
+	consumerKnowledgeBase rocketmq.PushConsumer
 
 	// 消息处理器表
 	handlers = make(map[string]MessageHandler)
@@ -50,10 +51,13 @@ func init() {
 	rlog.SetLogLevel("warn")
 
 	var err error
-	consumerInstance, err = rocketmq.NewPushConsumer(
-		consumer.WithNameServer(config.Cfg.MQ.NameServer),
-		consumer.WithGroupName(consumerGroup),
-		consumer.WithConsumerModel(consumer.Clustering),
+	consumerKnowledgeBase, err = rocketmq.NewPushConsumer(
+		c.WithNameServer(config.Cfg.MQ.NameServer),
+		c.WithGroupName(consumeGroupKnowledgeBase),
+		c.WithConsumerModel(c.Clustering),
+		c.WithConsumeFromWhere(c.ConsumeFromLastOffset),
+		c.WithMaxReconsumeTimes(maxReconsumeTimes),
+		c.WithConsumeGoroutineNums(consumeGoroutineNums),
 	)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create consumer: %v", err))
@@ -69,33 +73,33 @@ func init() {
 
 func Run() error {
 	// 注册消息处理器
-	if err := registerHandler(TopicKnowledgeBase, TagETL, etl.HandleETLMessage); err != nil {
-		return fmt.Errorf("failed to register handler: %v", err)
+	if err := registerHandler(consumerKnowledgeBase, TopicKnowledgeBase, TagETL, etl.HandleETLMessage); err != nil {
+		return fmt.Errorf("failed to register handler, topic: %s, tag: %s, err: %v", TopicKnowledgeBase, TagETL, err)
 	}
 
 	if err := producerInstance.Start(); err != nil {
 		return fmt.Errorf("failed to start producer: %v", err)
 	}
 
-	if err := consumerInstance.Start(); err != nil {
+	if err := consumerKnowledgeBase.Start(); err != nil {
 		return fmt.Errorf("failed to start consumer: %v", err)
 	}
 	return nil
 }
 
 // registerHandler 注册消息处理器
-func registerHandler(topic string, tag string, handler MessageHandler) error {
+func registerHandler(consumer rocketmq.PushConsumer, topic string, tag string, handler MessageHandler) error {
 	handlers[topic] = handler
 
-	selector := consumer.MessageSelector{}
+	selector := c.MessageSelector{}
 	if tag != "" {
-		selector = consumer.MessageSelector{
-			Type:       consumer.TAG,
+		selector = c.MessageSelector{
+			Type:       c.TAG,
 			Expression: tag,
 		}
 	}
 
-	err := consumerInstance.Subscribe(topic, selector, func(ctx context.Context, messages ...*primitive.MessageExt) (consumer.ConsumeResult, error) {
+	err := consumer.Subscribe(topic, selector, func(ctx context.Context, messages ...*primitive.MessageExt) (c.ConsumeResult, error) {
 		for _, msg := range messages {
 			h := handlers[msg.Topic]
 			if h == nil {
@@ -108,10 +112,12 @@ func registerHandler(topic string, tag string, handler MessageHandler) error {
 					"topic", msg.Topic,
 					"msg_id", msg.MsgId,
 					"error", err)
-				return consumer.ConsumeRetryLater, err
+				return c.ConsumeRetryLater, err
 			}
+
+			// TODO: 消息消费成功，更新文档处理状态
 		}
-		return consumer.ConsumeSuccess, nil
+		return c.ConsumeSuccess, nil
 	})
 
 	if err != nil {
@@ -138,7 +144,7 @@ func SendMessage(ctx context.Context, message *Message) error {
 			_, err := producerInstance.SendSync(ctx, msg)
 			return err
 		},
-		retry.Attempts(sendAttempts),
+		retry.Attempts(sendMessageAttempts),
 		retry.DelayType(retry.BackOffDelay),
 		retry.OnRetry(func(n uint, err error) {
 			slog.Warn("Retrying to send message",
@@ -148,6 +154,7 @@ func SendMessage(ctx context.Context, message *Message) error {
 		}),
 	)
 	if err != nil {
+		// TODO: 消息发送失败，更新文档处理状态
 		return fmt.Errorf("failed to send message to topic %s after retries: %v", msg.Topic, err)
 	}
 
@@ -159,7 +166,7 @@ func Shutdown() {
 	if producerInstance != nil {
 		producerInstance.Shutdown()
 	}
-	if consumerInstance != nil {
-		consumerInstance.Shutdown()
+	if consumerKnowledgeBase != nil {
+		consumerKnowledgeBase.Shutdown()
 	}
 }
