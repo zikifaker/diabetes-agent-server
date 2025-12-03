@@ -138,7 +138,7 @@ func sendRunTaskCmd(wsConnection *WSConnection) (string, error) {
 func waitForTaskStarted(taskStarted chan bool) error {
 	select {
 	case <-taskStarted:
-		//slog.Debug("start task successfully")
+		slog.Debug("start task successfully")
 	case <-time.After(10 * time.Second):
 		return fmt.Errorf("timeout waiting for task-started")
 	}
@@ -188,7 +188,7 @@ func sendFinishTaskCmd(wsConnection *WSConnection, taskID string) error {
 func handleEvent(event Event, taskStarted chan<- bool, taskDone chan<- bool, result *strings.Builder) bool {
 	switch event.Header.Event {
 	case "task-started":
-		//slog.Debug("receive task-started event")
+		slog.Debug("receive task-started event")
 		taskStarted <- true
 	case "result-generated":
 		// 若语音识别出完整的句子，将结果写入result
@@ -196,7 +196,7 @@ func handleEvent(event Event, taskStarted chan<- bool, taskDone chan<- bool, res
 			result.WriteString(event.Payload.Output.Sentence.Text)
 		}
 	case "task-finished":
-		//slog.Dubug("task finished")
+		slog.Debug("task finished")
 		taskDone <- true
 		return true
 	case "task-failed":

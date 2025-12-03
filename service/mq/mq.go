@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/apache/rocketmq-client-go/v2"
 	c "github.com/apache/rocketmq-client-go/v2/consumer"
@@ -34,9 +35,6 @@ var (
 
 	// 知识库业务消费者
 	consumerKnowledgeBase rocketmq.PushConsumer
-
-	// 消息处理器表
-	handlers = make(map[string]MessageHandler)
 )
 
 type MessageHandler func(context.Context, *primitive.MessageExt) error
@@ -74,11 +72,8 @@ func init() {
 
 func Run() error {
 	// 注册消息处理器
-	// if err := registerHandler(consumerKnowledgeBase, TopicKnowledgeBase, TagETL, etl.HandleETLMessage); err != nil {
-	// 	return fmt.Errorf("failed to register handler, topic: %s, tag: %s, err: %v", TopicKnowledgeBase, TagETL, err)
-	// }
-	if err := registerHandler(consumerKnowledgeBase, TopicKnowledgeBase, TagDelete, etl.HandleDeleteMessage); err != nil {
-		return fmt.Errorf("failed to register handler, topic: %s, tag: %s, err: %v", TopicKnowledgeBase, TagDelete, err)
+	if err := consumerSubscribe(consumerKnowledgeBase, TopicKnowledgeBase, TagETL, TagDelete); err != nil {
+		return fmt.Errorf("failed to register handler, topic: %s, tag: %s, err: %v", TopicKnowledgeBase, TagETL, err)
 	}
 
 	if err := producerInstance.Start(); err != nil {
@@ -91,27 +86,33 @@ func Run() error {
 	return nil
 }
 
-// registerHandler 注册消息处理器
-func registerHandler(consumer rocketmq.PushConsumer, topic string, tag string, handler MessageHandler) error {
-	handlers[topic] = handler
+// consumerSubscribe 消费者订阅
+func consumerSubscribe(consumer rocketmq.PushConsumer, topic string, tags ...string) error {
+	var expression string
+	expression = strings.Join(tags, "||")
 
 	selector := c.MessageSelector{}
-	if tag != "" {
+	if expression != "" {
 		selector = c.MessageSelector{
 			Type:       c.TAG,
-			Expression: tag,
+			Expression: expression,
 		}
 	}
 
 	err := consumer.Subscribe(topic, selector, func(ctx context.Context, messages ...*primitive.MessageExt) (c.ConsumeResult, error) {
 		for _, msg := range messages {
-			h := handlers[msg.Topic]
-			if h == nil {
-				slog.Warn("No message handler found for topic", "topic", msg.Topic)
+			var handler MessageHandler
+			switch msg.GetTags() {
+			case TagETL:
+				handler = etl.HandleETLMessage
+			case TagDelete:
+				handler = etl.HandleDeleteMessage
+			default:
+				slog.Warn("No message handler found for topic", "topic", msg.Topic, "tags", msg.GetTags())
 				continue
 			}
 
-			if err := h(ctx, msg); err != nil {
+			if err := handler(ctx, msg); err != nil {
 				slog.Error("Failed to process message",
 					"topic", msg.Topic,
 					"msg_id", msg.MsgId,

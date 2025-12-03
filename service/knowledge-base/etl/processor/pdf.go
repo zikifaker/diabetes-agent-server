@@ -103,7 +103,7 @@ func (p *PDFETLProcessor) ExecuteETLPipeline(ctx context.Context, data []byte, o
 		texts = append(texts, doc.PageContent)
 	}
 
-	slog.Debug("doc chunk", "texts_num", len(texts))
+	slog.Debug("split documents successfully", "texts_num", len(texts))
 
 	// 生成文档切片的向量
 	vectors, err := p.Embedder.EmbedDocuments(ctx, texts)
@@ -111,7 +111,7 @@ func (p *PDFETLProcessor) ExecuteETLPipeline(ctx context.Context, data []byte, o
 		return fmt.Errorf("error embedding documents: %v", err)
 	}
 
-	slog.Debug("embeded documents successfully", "vectors_num", len(vectors))
+	slog.Debug("embedded documents successfully", "vectors_num", len(vectors))
 
 	// 组装列数据，包括文档切片、向量和元数据
 	columns := make([]column.Column, 0)
