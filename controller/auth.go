@@ -60,7 +60,10 @@ func UserLogin(c *gin.Context) {
 
 	user, err := auth.UserLogin(req)
 	if err != nil {
-		slog.Error(ErrUserLogin.Error(), "email", req.Email, "err", err)
+		slog.Error(ErrUserLogin.Error(),
+			"email", req.Email,
+			"err", err,
+		)
 		c.AbortWithStatusJSON(http.StatusInternalServerError, response.Response{
 			Msg: ErrUserLogin.Error(),
 		})
@@ -69,7 +72,10 @@ func UserLogin(c *gin.Context) {
 
 	token, err := middleware.GenerateToken(user.Email)
 	if err != nil {
-		slog.Error(ErrGenerateToken.Error(), "email", user.Email, "err", err)
+		slog.Error(ErrGenerateToken.Error(),
+			"email", user.Email,
+			"err", err,
+		)
 		c.AbortWithStatusJSON(http.StatusInternalServerError, response.Response{
 			Msg: ErrGenerateToken.Error(),
 		})

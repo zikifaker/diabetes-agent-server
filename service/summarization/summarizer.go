@@ -105,7 +105,10 @@ func (s *Summarizer) executeSummarization(ctx context.Context, id int) {
 			for _, msgID := range task.MessageIDs {
 				msg, err := dao.GetMessageByID(msgID)
 				if err != nil {
-					slog.Error("Failed to get message", "msg_id", msgID, "err", err)
+					slog.Error("Failed to get message",
+						"msg_id", msgID,
+						"err", err,
+					)
 					continue
 				}
 
@@ -115,7 +118,10 @@ func (s *Summarizer) executeSummarization(ctx context.Context, id int) {
 
 				res, err := s.summarizeMessage(ctx, msg.Role, msg.Content)
 				if err != nil {
-					slog.Error("Failed to summary message", "msg_id", msgID, "err", err)
+					slog.Error("Failed to summary message",
+						"msg_id", msgID,
+						"err", err,
+					)
 					continue
 				}
 
