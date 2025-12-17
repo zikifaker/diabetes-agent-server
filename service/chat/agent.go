@@ -15,6 +15,7 @@ import (
 	mcpadapter "github.com/i2y/langchaingo-mcp-adapter"
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
+	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/tmc/langchaingo/agents"
 	"github.com/tmc/langchaingo/chains"
 	"github.com/tmc/langchaingo/llms/openai"
@@ -22,7 +23,11 @@ import (
 	"github.com/tmc/langchaingo/tools"
 )
 
-const BaseURL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+const (
+	BaseURL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+
+	methodToolCompleted = "tool_completed"
+)
 
 var (
 	// 配置 300s 超时时间处理 LLM 流式输出
@@ -59,26 +64,26 @@ func NewAgent(c *gin.Context, req request.ChatRequest) (*Agent, error) {
 		openai.WithHTTPClient(agentHTTPClient),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create LLM: %v", err)
+		return nil, fmt.Errorf("failed to create llm client: %v", err)
 	}
 
 	mcpClient, err := createMCPClient(c)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create MCP client: %v", err)
+		return nil, fmt.Errorf("failed to create mcp client: %v", err)
+	}
+
+	ctx := context.Background()
+	if err := mcpClient.Start(ctx); err != nil {
+		return nil, fmt.Errorf("failed to init connection to the mcp server: %v", err)
 	}
 
 	mcpTools, err := getMCPTools(mcpClient, req.AgentConfig.Tools)
 	if err != nil {
-		slog.Error("failed to get MCP tools", "err", err)
+		slog.Error("failed to get mcp tools", "err", err)
 	}
 
-	chatHistory := NewMySQLChatMessageHistory(req.SessionID)
-
-	sseHandler := NewGinSSEHandler(
-		c,
-		chatHistory,
-		req.SessionID,
-	)
+	sseHandler := NewGinSSEHandler(c, req.SessionID)
+	registerMCPClientNotifications(ctx, mcpClient, sseHandler)
 
 	a := agents.NewConversationalAgent(llm, mcpTools,
 		agents.WithCallbacksHandler(sseHandler),
@@ -87,6 +92,7 @@ func NewAgent(c *gin.Context, req request.ChatRequest) (*Agent, error) {
 		agents.WithPromptSuffix(conversationalSuffix),
 	)
 
+	chatHistory := NewMySQLChatMessageHistory(req.SessionID)
 	memory := memory.NewConversationBuffer(
 		memory.WithChatHistory(chatHistory),
 	)
@@ -106,11 +112,7 @@ func NewAgent(c *gin.Context, req request.ChatRequest) (*Agent, error) {
 }
 
 func (a *Agent) Call(ctx context.Context, req request.ChatRequest) (string, error) {
-	result, err := chains.Run(
-		ctx,
-		a.Executor,
-		req.Query,
-	)
+	result, err := chains.Run(ctx, a.Executor, req.Query)
 	if err != nil {
 		return "", err
 	}
@@ -119,7 +121,8 @@ func (a *Agent) Call(ctx context.Context, req request.ChatRequest) (string, erro
 
 // SaveAgentSteps 存储思考步骤
 func (a *Agent) SaveAgentSteps(ctx context.Context) error {
-	return a.SSEHandler.SaveAgentSteps(ctx)
+	immediateSteps := a.SSEHandler.GetImmediateSteps()
+	return a.ChatHistory.SetImmediateSteps(ctx, immediateSteps)
 }
 
 func (a *Agent) Close() error {
@@ -136,6 +139,7 @@ func createMCPClient(c *gin.Context) (*client.Client, error) {
 		transport.WithHTTPHeaders(map[string]string{
 			"Authorization": c.GetHeader("Authorization"),
 		}),
+		transport.WithContinuousListening(),
 	)
 	if err != nil {
 		return nil, err
@@ -143,20 +147,21 @@ func createMCPClient(c *gin.Context) (*client.Client, error) {
 	return mcpClient, nil
 }
 
-// getMCPTools 返回用户选择的工具
+// 返回用户选择的工具
 func getMCPTools(mcpClient *client.Client, toolNames []string) ([]tools.Tool, error) {
 	if len(toolNames) == 0 {
 		return nil, nil
 	}
 
+	// 初始化与 MCP 服务端的连接
 	mcpAdapter, err := mcpadapter.New(mcpClient)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create MCP adapter: %v", err)
+		return nil, fmt.Errorf("failed to create mcp adapter: %v", err)
 	}
 
 	mcpTools, err := mcpAdapter.Tools()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get MCP tools: %v", err)
+		return nil, fmt.Errorf("failed to get mcp tools: %v", err)
 	}
 
 	toolMap := make(map[string]bool)
@@ -172,4 +177,29 @@ func getMCPTools(mcpClient *client.Client, toolNames []string) ([]tools.Tool, er
 	}
 
 	return filteredTools, nil
+}
+
+// 注册通知处理方法，接收 MCP 服务端推送的工具调用结果
+func registerMCPClientNotifications(ctx context.Context, mcpClient *client.Client, sseHandler *GinSSEHandler) {
+	mcpClient.OnNotification(func(notification mcp.JSONRPCNotification) {
+		if notification.Method != methodToolCompleted {
+			return
+		}
+
+		results, ok := notification.Params.AdditionalFields["result"].([]any)
+		if !ok {
+			slog.Error("invalid tool call result type")
+			return
+		}
+
+		for _, res := range results {
+			if content, ok := res.(map[string]any); ok {
+				switch contentType := content["type"].(string); contentType {
+				case "text":
+					textContent := content["text"].(string)
+					sseHandler.HandleToolEnd(ctx, textContent)
+				}
+			}
+		}
+	})
 }

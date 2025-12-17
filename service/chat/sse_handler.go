@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	// Agent输出缓冲区大小阈值
+	// Agent 输出缓冲区大小阈值
 	prefixBufferMaxKeep = 10
 
 	// 最终答案的前缀
@@ -17,31 +17,31 @@ const (
 
 	eventImmediateSteps = "immediate_steps"
 	eventFinalAnswer    = "final_answer"
+	eventToolCallResult = "tool_call_result"
 )
 
-// GinSSEHandler 基于Gin的回调处理器，使用SSE发送Agent的输出内容
+// GinSSEHandler 基于 Gin 的回调处理器，使用 SSE 发送 Agent 的输出内容
 type GinSSEHandler struct {
 	callbacks.SimpleHandler
-	Ctx         *gin.Context
-	ChatHistory *MySQLChatMessageHistory
-	Session     string
+
+	Ctx     *gin.Context
+	Session string
 
 	// 缓冲区，用于跨 chunk 识别最终答案的前缀
 	prefixBuffer *strings.Builder
 
-	// Agent输出中是否包含最终答案
+	// Agent 输出中是否包含最终答案
 	hasFinalAnswer bool
 
-	// 存储Agent的思考步骤
+	// 存储 Agent 的思考步骤
 	immediateStepsBuilder *strings.Builder
 }
 
 var _ callbacks.Handler = &GinSSEHandler{}
 
-func NewGinSSEHandler(ctx *gin.Context, chatHistory *MySQLChatMessageHistory, session string) *GinSSEHandler {
+func NewGinSSEHandler(ctx *gin.Context, session string) *GinSSEHandler {
 	return &GinSSEHandler{
 		Ctx:                   ctx,
-		ChatHistory:           chatHistory,
 		Session:               session,
 		prefixBuffer:          &strings.Builder{},
 		hasFinalAnswer:        false,
@@ -78,7 +78,7 @@ func (h *GinSSEHandler) HandleStreamingFunc(ctx context.Context, chunk []byte) {
 		h.hasFinalAnswer = true
 		h.prefixBuffer.Reset()
 	} else {
-		// 保留最后 prefixBufferMaxKeep 个 rune, 防止缓冲区过大
+		// 保留最后 prefixBufferMaxKeep 个 rune，防止缓冲区过大
 		if h.prefixBuffer.Len() > 0 {
 			runes := []rune(bufferStr)
 			if len(runes) > prefixBufferMaxKeep {
@@ -97,6 +97,11 @@ func (h *GinSSEHandler) HandleStreamingFunc(ctx context.Context, chunk []byte) {
 	h.Ctx.Writer.Flush()
 }
 
-func (h *GinSSEHandler) SaveAgentSteps(ctx context.Context) error {
-	return h.ChatHistory.SetImmediateSteps(ctx, h.immediateStepsBuilder.String())
+func (h *GinSSEHandler) HandleToolEnd(ctx context.Context, result string) {
+	h.Ctx.SSEvent(eventToolCallResult, result)
+	h.Ctx.Writer.Flush()
+}
+
+func (h *GinSSEHandler) GetImmediateSteps() string {
+	return h.immediateStepsBuilder.String()
 }
