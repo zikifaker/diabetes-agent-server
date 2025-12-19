@@ -2,6 +2,14 @@ package utils
 
 import "github.com/gin-gonic/gin"
 
+const (
+	EventImmediateSteps = "immediate_steps"
+	EventFinalAnswer    = "final_answer"
+	EventToolCallResult = "tool_call_result"
+	EventError          = "error"
+	EventDone           = "done"
+)
+
 func SetSSEHeaders(c *gin.Context) {
 	c.Writer.Header().Set("Content-Type", "text/event-stream")
 	c.Writer.Header().Set("Cache-Control", "no-cache")

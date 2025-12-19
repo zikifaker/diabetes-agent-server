@@ -116,10 +116,10 @@ func (h *MySQLChatMessageHistory) addMessage(ctx context.Context, text string, r
 		return result.Error
 	}
 
-	if role == llms.ChatMessageTypeAI {
+	switch role {
+	case llms.ChatMessageTypeAI:
 		h.AgentMessageID = msg.ID
-	}
-	if role == llms.ChatMessageTypeHuman {
+	case llms.ChatMessageTypeHuman:
 		h.UserMessageID = msg.ID
 	}
 

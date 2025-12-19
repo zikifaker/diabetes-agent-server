@@ -6,9 +6,11 @@ import (
 	"diabetes-agent-backend/request"
 	"diabetes-agent-backend/utils"
 	_ "embed"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -50,7 +52,7 @@ var (
 )
 
 type Agent struct {
-	// 执行器，负责进行推理
+	// Agent 执行器
 	Executor *agents.Executor
 
 	// MCP 客户端
@@ -118,27 +120,61 @@ func NewAgent(c *gin.Context, req request.ChatRequest) (*Agent, error) {
 	}, nil
 }
 
-func (a *Agent) Call(ctx context.Context, req request.ChatRequest) error {
-	_, err := chains.Run(ctx, a.Executor, req.Query)
+func (a *Agent) Call(ctx context.Context, query string, c *gin.Context) error {
+	// 保存数据的上下文，避免外部上下文取消时无法继续保存
+	saveCtx := context.Background()
+
+	// 若 chains.Run 成功执行，会自动存储问答对
+	_, err := chains.Run(ctx, a.Executor, query)
 	if err != nil {
-		return err
+		switch {
+		// 若抛出 ErrUnableToParseOutput，从错误信息中提取回答后推送，持久化问答对
+		case errors.Is(err, agents.ErrUnableToParseOutput):
+			slog.Warn("Failed to parse agent output, missing prefix 'AI:'")
+
+			answer := strings.TrimPrefix(err.Error(), agents.ErrUnableToParseOutput.Error()+":")
+			utils.SendSSEMessage(c, utils.EventFinalAnswer, answer)
+
+			if err := a.SaveConversation(saveCtx, query, answer); err != nil {
+				slog.Error("Failed to save agent final answer", "err", err)
+			}
+
+		// 若抛出 context.Canceled，持久化问答对
+		case errors.Is(err, context.Canceled):
+			slog.Warn("Client canceled")
+
+			answer := a.SSEHandler.FinalAnswer.String()
+			if err := a.SaveConversation(saveCtx, query, answer); err != nil {
+				slog.Error("Failed to save agent final answer", "err", err)
+			}
+
+		default:
+			return err
+		}
 	}
+
+	// 存储思考步骤
+	immediateSteps := a.SSEHandler.ImmediateSteps.String()
+	if err := a.ChatHistory.SetImmediateSteps(saveCtx, immediateSteps); err != nil {
+		slog.Error("Failed to save agent steps", "err", err)
+	}
+
 	return nil
 }
 
-// SaveFinalAnswer 存储最终答案，当发生 ErrUnableToParseOutput 时调用
-func (a *Agent) SaveFinalAnswer(ctx context.Context, answer string) {
-	if err := a.ChatHistory.AddAIMessage(ctx, answer); err != nil {
-		slog.Error("Failed to save final answer", "err", err)
+// SaveConversation 存储问答对
+func (a *Agent) SaveConversation(ctx context.Context, query, answer string) error {
+	err := a.ChatHistory.AddUserMessage(ctx, query)
+	if err != nil {
+		return err
 	}
-}
 
-// SaveAgentSteps 存储思考步骤
-func (a *Agent) SaveAgentSteps(ctx context.Context) {
-	immediateSteps := a.SSEHandler.GetImmediateSteps()
-	if err := a.ChatHistory.SetImmediateSteps(ctx, immediateSteps); err != nil {
-		slog.Error("Failed to save agent steps", "err", err)
+	err = a.ChatHistory.AddAIMessage(ctx, answer)
+	if err != nil {
+		return err
 	}
+
+	return nil
 }
 
 func (a *Agent) Close() error {
@@ -204,7 +240,7 @@ func registerMCPNotificationHandler(ctx context.Context, mcpClient *client.Clien
 
 		results, ok := notification.Params.AdditionalFields["result"].([]any)
 		if !ok {
-			slog.Error("invalid tool call result type")
+			slog.Error("Invalid tool call result type")
 			return
 		}
 
