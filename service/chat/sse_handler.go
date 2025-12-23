@@ -2,6 +2,7 @@ package chat
 
 import (
 	"context"
+	"diabetes-agent-backend/model"
 	"diabetes-agent-backend/utils"
 	"strings"
 
@@ -29,6 +30,9 @@ type GinSSEHandler struct {
 
 	// 存储 Agent 的最终答案
 	FinalAnswer *strings.Builder
+
+	// 存储 Agent 的工具调用结果
+	ToolCallResults []model.ToolCallResult
 
 	// 缓冲区，用于跨 chunk 识别最终答案的前缀
 	prefixBuffer *strings.Builder
@@ -95,6 +99,7 @@ func (h *GinSSEHandler) HandleStreamingFunc(ctx context.Context, chunk []byte) {
 	}
 }
 
-func (h *GinSSEHandler) HandleToolEnd(ctx context.Context, result string) {
+func (h *GinSSEHandler) HandleToolCallResult(ctx context.Context, result model.ToolCallResult) {
+	h.ToolCallResults = append(h.ToolCallResults, result)
 	utils.SendSSEMessage(h.Ctx, utils.EventToolCallResult, result)
 }

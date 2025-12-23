@@ -5,7 +5,7 @@ import "github.com/gin-gonic/gin"
 const (
 	EventImmediateSteps = "immediate_steps"
 	EventFinalAnswer    = "final_answer"
-	EventToolCallResult = "tool_call_result"
+	EventToolCallResult = "tool_call_results"
 	EventError          = "error"
 	EventDone           = "done"
 )

@@ -22,7 +22,9 @@ func SaveKnowledgeMetadata(req request.UploadKnowledgeMetadataRequest, email str
 
 func GetKnowledgeMetadataByEmail(email string) ([]model.KnowledgeMetadata, error) {
 	var fileMetadata []model.KnowledgeMetadata
-	if err := DB.Where("user_email = ?", email).Order("created_at DESC").Find(&fileMetadata).Error; err != nil {
+	if err := DB.Where("user_email = ?", email).
+		Order("created_at DESC").
+		Find(&fileMetadata).Error; err != nil {
 		return nil, err
 	}
 	return fileMetadata, nil
@@ -30,7 +32,8 @@ func GetKnowledgeMetadataByEmail(email string) ([]model.KnowledgeMetadata, error
 
 func GetKnowledgeMetadataByEmailAndFileName(email, fileName string) (*model.KnowledgeMetadata, error) {
 	var fileMetadata model.KnowledgeMetadata
-	if err := DB.Where("user_email = ? AND file_name = ?", email, fileName).First(&fileMetadata).Error; err != nil {
+	if err := DB.Where("user_email = ? AND file_name = ?", email, fileName).
+		First(&fileMetadata).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}
@@ -40,7 +43,8 @@ func GetKnowledgeMetadataByEmailAndFileName(email, fileName string) (*model.Know
 }
 
 func DeleteKnowledgeMetadataByEmailAndFileName(email, fileName string) error {
-	return DB.Where("user_email = ? AND file_name = ?", email, fileName).Delete(&model.KnowledgeMetadata{}).Error
+	return DB.Where("user_email = ? AND file_name = ?", email, fileName).
+		Delete(&model.KnowledgeMetadata{}).Error
 }
 
 func UpdateKnowledgeMetadataStatus(email, fileName string, status model.Status) error {

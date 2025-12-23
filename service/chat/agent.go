@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"diabetes-agent-backend/config"
+	"diabetes-agent-backend/model"
 	"diabetes-agent-backend/request"
 	"diabetes-agent-backend/utils"
 	_ "embed"
@@ -159,6 +160,11 @@ func (a *Agent) Call(ctx context.Context, query string, c *gin.Context) error {
 		slog.Error("Failed to save agent steps", "err", err)
 	}
 
+	// 存储工具调用结果
+	if err := a.ChatHistory.SetToolCallResults(saveCtx, a.SSEHandler.ToolCallResults); err != nil {
+		slog.Error("Failed to save agent tool call results", "err", err)
+	}
+
 	return nil
 }
 
@@ -238,20 +244,33 @@ func registerMCPNotificationHandler(ctx context.Context, mcpClient *client.Clien
 			return
 		}
 
+		toolName, ok := notification.Params.AdditionalFields["tool"].(string)
+		if !ok {
+			slog.Error("Invalid tool name type")
+			return
+		}
+
 		results, ok := notification.Params.AdditionalFields["result"].([]any)
 		if !ok {
 			slog.Error("Invalid tool call result type")
 			return
 		}
 
+		textContent := []string{}
 		for _, res := range results {
 			if content, ok := res.(map[string]any); ok {
 				switch contentType := content["type"].(string); contentType {
 				case "text":
-					textContent := content["text"].(string)
-					sseHandler.HandleToolEnd(ctx, textContent)
+					textContent = append(textContent, content["text"].(string))
 				}
 			}
 		}
+
+		toolCallResult := model.ToolCallResult{
+			Name:   toolName,
+			Result: textContent,
+		}
+
+		sseHandler.HandleToolCallResult(ctx, toolCallResult)
 	})
 }

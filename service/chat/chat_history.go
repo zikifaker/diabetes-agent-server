@@ -4,6 +4,7 @@ import (
 	"context"
 	"diabetes-agent-backend/dao"
 	"diabetes-agent-backend/model"
+	"encoding/json"
 
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/schema"
@@ -180,8 +181,26 @@ func (h *MySQLChatMessageHistory) SetImmediateSteps(ctx context.Context, steps s
 
 	result := h.DB.WithContext(ctx).
 		Table(h.TableName).
-		Where("id = ? AND session_id = ?", h.AgentMessageID, h.Session).
+		Where("id = ?", h.AgentMessageID).
 		Update("immediate_steps", steps)
+
+	return result.Error
+}
+
+func (h *MySQLChatMessageHistory) SetToolCallResults(ctx context.Context, toolCallResults []model.ToolCallResult) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	toolCallResultsJSON, err := json.Marshal(toolCallResults)
+	if err != nil {
+		return err
+	}
+
+	result := h.DB.WithContext(ctx).
+		Table(h.TableName).
+		Where("id = ?", h.AgentMessageID).
+		Update("tool_call_results", toolCallResultsJSON)
 
 	return result.Error
 }

@@ -87,10 +87,11 @@ func GetSessionMessages(c *gin.Context) {
 	var resp response.GetSessionMessagesResponse
 	for _, m := range messages {
 		resp.Messages = append(resp.Messages, response.MessageResponse{
-			CreatedAt:      m.CreatedAt,
-			Role:           m.Role,
-			Content:        m.Content,
-			ImmediateSteps: m.ImmediateSteps,
+			CreatedAt:       m.CreatedAt,
+			Role:            m.Role,
+			Content:         m.Content,
+			ImmediateSteps:  m.ImmediateSteps,
+			ToolCallResults: m.ToolCallResults,
 		})
 	}
 
