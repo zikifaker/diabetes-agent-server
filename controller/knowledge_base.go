@@ -120,7 +120,7 @@ func DeleteKnowledgeMetadata(c *gin.Context) {
 	c.JSON(http.StatusOK, response.Response{})
 }
 
-func GetPreSignedURL(c *gin.Context) {
+func GetPresignedURL(c *gin.Context) {
 	email := c.GetString("email")
 	fileName := c.Query("file-name")
 	objectName := email + "/" + fileName
