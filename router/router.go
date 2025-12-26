@@ -37,6 +37,7 @@ func Register() *gin.Engine {
 			protected.POST("/kb/metadata", controller.UploadKnowledgeMetadata)
 			protected.DELETE("/kb/metadata", controller.DeleteKnowledgeMetadata)
 			protected.GET("/kb/download-link", controller.GetPresignedURL)
+			protected.GET("/kb/metadata/search", controller.SearchKnowledgeMetadata)
 		}
 	}
 

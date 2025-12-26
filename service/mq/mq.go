@@ -23,10 +23,9 @@ const (
 	TagDelete          = "tag_delete"
 
 	consumeGroupKnowledgeBase = "cg_knowledge_base"
-
-	sendMessageAttempts  = 3
-	maxReconsumeTimes    = 5
-	consumeGoroutineNums = 10
+	sendMessageAttempts       = 3
+	maxReconsumeTimes         = 5
+	consumeGoroutineNums      = 10
 )
 
 var (
@@ -72,8 +71,16 @@ func init() {
 
 func Run() error {
 	// 注册消息处理器
-	if err := consumerSubscribe(consumerKnowledgeBase, TopicKnowledgeBase, TagETL, TagDelete); err != nil {
-		return fmt.Errorf("failed to register handler, topic: %s, tag: %s, err: %v", TopicKnowledgeBase, TagETL, err)
+	err := consumerSubscribe(consumerKnowledgeBase, TopicKnowledgeBase,
+		TagETL,
+		TagDelete,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to register handler, topic: %s, tags: %s, err: %v",
+			TopicKnowledgeBase,
+			fmt.Sprintf("%s,%s", TagETL, TagDelete),
+			err,
+		)
 	}
 
 	if err := producerInstance.Start(); err != nil {

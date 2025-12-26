@@ -140,3 +140,37 @@ func GetPresignedURL(c *gin.Context) {
 		},
 	})
 }
+
+func SearchKnowledgeMetadata(c *gin.Context) {
+	email := c.GetString("email")
+	query := c.Query("query")
+
+	if query == "" {
+		c.JSON(http.StatusBadRequest, response.Response{
+			Msg: "search query is empty",
+		})
+		return
+	}
+
+	metadata, err := dao.SearchKnowledgeMetadataByFullText(email, query)
+	if err != nil {
+		slog.Error(ErrSearchKnowledgeMetadata.Error(), "err", err)
+		c.AbortWithStatusJSON(http.StatusInternalServerError, response.Response{
+			Msg: ErrSearchKnowledgeMetadata.Error(),
+		})
+		return
+	}
+
+	var resp response.SearchKnowledgeMetadataResponse
+	for _, item := range metadata {
+		resp.Metadata = append(resp.Metadata, response.MetadataResponse{
+			FileName: item.FileName,
+			FileType: string(item.FileType),
+			FileSize: item.FileSize,
+		})
+	}
+
+	c.JSON(http.StatusOK, response.Response{
+		Data: resp,
+	})
+}

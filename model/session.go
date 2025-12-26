@@ -20,7 +20,8 @@ func (Session) TableName() string {
 	return "chat_session"
 }
 
-// Message 建立联合索引 (session_id, created_at)
+// Message 存储聊天记录
+// 建立联合索引 (session_id, created_at)
 type Message struct {
 	ID              uint            `gorm:"primarykey" json:"id"`
 	CreatedAt       time.Time       `gorm:"index:idx_session_created" json:"created_at"`

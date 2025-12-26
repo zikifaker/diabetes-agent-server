@@ -52,3 +52,18 @@ func UpdateKnowledgeMetadataStatus(email, fileName string, status model.Status) 
 		Where("user_email = ? AND file_name = ?", email, fileName).
 		Update("status", status).Error
 }
+
+func SearchKnowledgeMetadataByFullText(email, query string) ([]model.KnowledgeMetadata, error) {
+	var fileMetadata []model.KnowledgeMetadata
+
+	// 使用全文索引做左右模糊匹配
+	err := DB.Where("user_email = ? AND MATCH(file_name) AGAINST(? IN BOOLEAN MODE)", email, "*"+query+"*").
+		Order("created_at DESC").
+		Find(&fileMetadata).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return fileMetadata, nil
+}
